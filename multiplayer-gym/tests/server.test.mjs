@@ -48,3 +48,14 @@ await req('/'+filtered.id+'/skip',3,{},409);
 let unavailable=await req('',3,{name:'Unavailable',avatar:'🦊',count:1,novaCount:0,ecoCount:0,country:'canada',seconds:20,readySeconds:30,operation:'c'.repeat(32)});
 await req('/'+unavailable.id+'/start',3,{},503);assert.equal((await req('/'+unavailable.id,3)).phase,'lobby','failed photo verification preserves room');
 console.log('PASS all photos unavailable: no incomplete game starts and room survives.');
+// Short draws automatically start with verified products and coherent phase counts.
+for(const sparse of [true,false]){
+ sqlite.exec('DELETE FROM off_cache');
+ const one={...fixture[0],image_front_url:'https://images.openfoodfacts.org/available.jpg',nova_group:null,ecoscore_grade:'unknown'};
+ globalThis.fetch=async(url,options)=>options?.method==='HEAD'?new Response(null,{status:String(url).includes('available.jpg')?200:404,headers:{'Content-Type':'image/jpeg'}}):Response.json({products:sparse?[one]:[one,...fixture.slice(1)],hits:sparse?[one]:[one,...fixture.slice(1)]});
+ let short=await req('',3,{name:'Short',avatar:'🦊',count:4,novaCount:1,ecoCount:1,country:'canada',seconds:20,readySeconds:30,operation:(sparse?'1':'2').repeat(32)});
+ short=await req('/'+short.id+'/start',3,{});assert.equal(short.phase,'intro');assert.equal(short.requestedTotal,6);assert.equal(short.total,1);assert.equal(short.count,1);assert.equal(short.novaCount,0);assert.equal(short.ecoCount,0);
+ short=await req('/'+short.id+'/ready',3,{gameId:short.gameId,step:short.step,ready:true});assert.equal(short.phase,'vote');assert.equal(short.phaseTotal,1);
+ short=await req('/'+short.id+'/vote',3,{gameId:short.gameId,round:short.round,choice:'C'});clock=short.resultAt+1;short=await req('/'+short.id,3);assert.equal(short.phase,'finished');assert.equal(short.lastFinal.total,1);
+}
+console.log('PASS 6 requested -> 1 valid: short search pool and failed photos, absent bonuses skipped, correct final.');

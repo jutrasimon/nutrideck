@@ -59,3 +59,7 @@ Flip 3D recto/verso, léger squash réglable, traits de vitesse optionnels, incl
 Sept produits réels et leurs images locales couvrent des rapports de forme de 119×400 à 400×150, plus un exemple hors ligne. Import local de PNG/JPG/WebP/AVIF pour tester d’autres images (session seulement, 15 Mo par image, 12 par sélection). Styles, favoris et emplacements sont sauvegardés sur cet appareil; les images locales ne sont pas persistées. L’export JSON concerne le style, pas la collection.
 
 Validation dans Chromium : 33 combinaisons produit/format/taille et titre long, images chargées avec object-fit contain, deux lignes complètes, défilement du verso, flip, mystère, favoris et emplacements après rechargement, déplacement réel au pointeur, annulation, export/import de style, cinq vues à 390 px sans débordement de page, photo inaccessible et import d’un PNG transparent. Captures desktop/mobile inspectées. Les formats WebP/AVIF sont acceptés via le décodage natif; ils n’ont pas été testés avec un fichier dédié. Aucun remplacement des cartes des jeux existants.
+
+## Correctif v0.3.1
+
+Clic/tap sur le verso rétabli. Les gestes de défilement et sélections de texte sont distingués du clic. Flip simplifié à une rotation Y centrale, sans squash ni traits de vitesse; le hover est neutralisé pendant la rotation. Cœur vectoriel déplacé dans les commandes sous la carte. Vérifié dans Chromium : trois allers-retours souris sur les faces, retour depuis les ingrédients, défilement sans flip, aller-retour tactile et favori sans flip.

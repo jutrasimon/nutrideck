@@ -47,3 +47,15 @@ Les données OFF sont un instantané, pas une validation nutritionnelle. Images 
 ## Prochaines décisions de design
 
 Évaluer d'abord une carte à 190 px dans une main. Vérifier la distinction entre identité, valeur principale et scores secondaires. Choisir ensuite la direction et le nombre de valeurs visibles avant de remplacer les cartes dans les quatre jeux.
+
+## Mise à jour v0.3.0 — Éditorial et interactions
+
+Éditorial est désormais la seule composition. Référence retenue : 240 px en jeu, angles 11 px, typographie 115 %, photo 95 %, ombre 28 %, trois scores. Palette orange/brun Open Food Facts, fond foncé. Le badge quantité quitte le recto et reste au verso. Marque réduite et rapprochée du titre. Le titre utilise une mesure réelle du texte et une recherche de taille pour tenir intégralement sur deux lignes, sans ellipse.
+
+Le verso entier défile, avec ingrédients agrandis et blocs distincts pour allergènes, traces et additifs. La section de vigilance est volontairement limitée aux phosphates E338–341, E343, E450–452, avec lien vers l’avis EFSA du 12 juin 2019 (https://www.efsa.europa.eu/fr/press/news/190612). Elle ne transforme pas l’absence de signal en déclaration d’innocuité. Les additifs repérés sont affichés séparément; les sous-types remplacent les codes parents en double.
+
+Flip 3D recto/verso, léger squash réglable, traits de vitesse optionnels, inclinaison au pointeur, cartes décalées et animation à la dépose. Les préférences de mouvement réduit sont respectées. Les boutons natifs permettent de retourner, marquer comme favori et prendre une carte. Trois emplacements permettent le drag au pointeur et un équivalent clic/clavier (poignée, puis emplacement). Échange entre emplacements et annulation. Le contenu du verso reste défilable sur mobile; sa poignée sert au drag tactile.
+
+Sept produits réels et leurs images locales couvrent des rapports de forme de 119×400 à 400×150, plus un exemple hors ligne. Import local de PNG/JPG/WebP/AVIF pour tester d’autres images (session seulement, 15 Mo par image, 12 par sélection). Styles, favoris et emplacements sont sauvegardés sur cet appareil; les images locales ne sont pas persistées. L’export JSON concerne le style, pas la collection.
+
+Validation dans Chromium : 33 combinaisons produit/format/taille et titre long, images chargées avec object-fit contain, deux lignes complètes, défilement du verso, flip, mystère, favoris et emplacements après rechargement, déplacement réel au pointeur, annulation, export/import de style, cinq vues à 390 px sans débordement de page, photo inaccessible et import d’un PNG transparent. Captures desktop/mobile inspectées. Les formats WebP/AVIF sont acceptés via le décodage natif; ils n’ont pas été testés avec un fichier dédié. Aucun remplacement des cartes des jeux existants.

@@ -1,0 +1,13 @@
+# Déploiement Render (Blueprint) : un seul service web gratuit.
+# Render → New → Blueprint → choisir ce dépôt → Apply.
+services:
+  - type: web
+    name: nutrideck
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: OFF_CONTACT          # contact ajouté au User-Agent envoyé à Open Food Facts (ex. ton courriel)
+        sync: false

@@ -1,0 +1,16 @@
+{
+  "name": "nutrideck",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cartes et mini-jeux autour des produits Open Food Facts",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

@@ -24,3 +24,5 @@
 .nd-actions .favorite[hidden]{display:none}.favorite svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .nd-actions .favorite:hover{background:#503522;color:#f5b57b}.nd-actions .favorite.on{background:#54321d;color:#f19d59;border-color:#b57743}.favorite.on svg{fill:currentColor}
 @media(max-width:680px){.nd-actions .favorite{height:32px;min-height:32px;width:43px}}
+
+.gym-nav{display:flex;gap:5px;align-items:center}.gym-nav a{font-size:12px;color:#e4b790;text-decoration:none;padding:8px 11px;border-radius:7px;border:1px solid #6d4b32}.gym-nav a[aria-current]{background:#55351f;color:#ffe2c3}@media(max-width:700px){.topbar{flex-wrap:wrap}.gym-nav{order:3;width:100%}.gym-nav a{flex:1;text-align:center}}

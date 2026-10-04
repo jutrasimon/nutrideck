@@ -21,3 +21,8 @@
 @media(prefers-reduced-motion:reduce){.nd-inner,.nd-tilt{transition:none!important}}
 
 .nd-masked-summary{margin:4cqw 0 0;padding:2.5cqw 3cqw;border:1px solid #ddcfc0;border-radius:2cqw;background:#f1e9df;color:#806b58;font-size:4cqw;font-weight:600;text-align:center}
+
+/* Persistent mobile scroll cue; native overlay scrollbars otherwise disappear. */
+.nd-scroll{scrollbar-width:none}.nd-scroll::-webkit-scrollbar{display:none}
+.nd-scroll-track{position:absolute;top:16px;bottom:16px;right:4px;width:3px;border-radius:9px;background:#b58e6826;pointer-events:none}
+.nd-scroll-track i{position:absolute;left:0;width:100%;min-height:12px;border-radius:9px;background:#b48358a6}

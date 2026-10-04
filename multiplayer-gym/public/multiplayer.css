@@ -19,3 +19,32 @@
  .multi .vote-product .nd-photo{margin:3cqw 3cqw 0}
  .multi .vote-product .nd-photo img{padding:2px}
 }
+
+/* Answer essentials first; achievements belong exclusively to the final board. */
+.answer-summary #action-dock{display:none}
+.answer-summary .product-insights{margin:8px 0 12px;padding-top:10px}
+.answer-summary .product-insights h2{margin-bottom:8px}
+.answer-summary .product-insights ol{gap:6px}
+.answer-summary .product-insights li{padding:9px 10px;gap:8px}
+.answer-summary .product-insights .insight-note{margin-top:7px;font-size:11px;line-height:1.35}
+.answer-summary .answer-wheel{height:66px;width:90px;margin:8px auto}
+.answer-summary .answer-wheel b{font-size:46px}
+.answer-summary .mini-grade-line{display:none}
+@media(max-width:760px){
+ .multi .answer-summary{display:grid;grid-template-columns:minmax(0,1fr) 76px;gap:8px 10px;align-items:center}
+ .answer-summary .main-stage,.answer-summary #stage{display:contents}
+ .answer-summary #game-heading{grid-column:1;grid-row:1;text-align:left}
+ .answer-summary #wheel-area{grid-column:2;grid-row:1}
+ .answer-summary .question-kicker{margin:0 0 4px;font-size:10px}
+ .answer-summary .reveal-caption{font-size:20px;line-height:1.2;margin:0}
+ .multi .answer-summary .answer-wheel{width:70px;height:62px;margin:0}
+ .answer-summary #insights{grid-column:1/-1;grid-row:2}
+ .answer-summary .product-insights{padding-top:8px;margin:0}
+ .answer-summary .product-insights h2{font-size:16px}
+ .answer-summary .product-insights h3{margin-bottom:2px}
+ .answer-summary .product-insights p{line-height:1.35}
+ .answer-summary>.players-panel{grid-column:1/-1;grid-row:3;padding-top:4px}
+ .answer-summary .players-panel .rules{display:none}
+ .multi .answer-summary .vote-product{grid-column:1/-1;grid-row:4;margin-top:12px}
+ .answer-summary #ballot{display:none}
+}

@@ -4,7 +4,7 @@ const DB={prepare(sql){return {bind(...params){return{async first(){return sqlit
 let clock=Date.now();Date.now=()=>clock;const tokens=['a','b','c','d'].map(x=>x.repeat(64));
 async function req(path,who=0,data,status=200){const r=await worker.fetch(new Request('https://nutri.test/api/rooms'+path,{method:data===undefined?'GET':'POST',headers:{Authorization:'Bearer '+tokens[who],'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)}),{DB},{});const d=await r.json();assert.equal(r.status,status,JSON.stringify(d));return d;}
 const raw=JSON.parse(readFileSync('public/gym-products.json'))[0];const fixture=Array.from({length:18},(_,i)=>({...raw,code:String(4000000000000+i),countries_tags:i<12?['en:canada']:['en:france'],image_front_url:'https://images.openfoodfacts.org/test.jpg',nutriscore_grade:'c',nova_group:4,ecoscore_grade:'b',nutriscore_version:'2023',nutriscore:{'2023':{grade:'c',data:{negative_points:8,positive_points:1,components:{negative:[{id:'sugars',value:25,unit:'g',points:6}],positive:[{id:'fiber',value:2,unit:'g',points:1}]}}}}}));
-const urls=[];globalThis.fetch=async url=>{urls.push(String(url));return Response.json({products:fixture,hits:fixture})};
+const urls=[];globalThis.fetch=async (url,options)=>{urls.push(String(url));if(options?.method==='HEAD')return new Response(null,{headers:{'Content-Type':'image/jpeg'}});return Response.json({products:fixture,hits:fixture})};
 let s=await req('',0,{name:'Simon',avatar:'🦊',count:2,novaCount:1,ecoCount:1,country:'canada',readySeconds:15,seconds:20,operation:'f'.repeat(32)}),id=s.id;
 await Promise.all([req('/'+id+'/join',1,{name:'Paul',avatar:'🐼'}),req('/'+id+'/join',2,{name:'Kattie',avatar:'🐸'})]);
 s=await req('/'+id+'/start',0,{});assert.equal(s.phase,'intro');assert.equal(s.mode,'nutri');assert.equal(s.product,null);assert(urls[0].includes('countries_tags=en%3Acanada'),'country query');const saved=()=>JSON.parse(sqlite.prepare('SELECT state FROM rooms WHERE id=?').get(id).state);assert(saved().deck.every(p=>p.countries_tags.includes('en:canada')),'never broadens country');assert.equal(new Set(saved().deck.map(p=>p.code)).size,4,'no repeated products across phases');
@@ -29,3 +29,22 @@ solo=await req(soloPath+'/ready',3,{gameId:solo.gameId,step:solo.step,ready:true
 solo=await req(soloPath+'/vote',3,{gameId:solo.gameId,round:solo.round,choice:'C'});assert.equal(solo.phase,'reveal','the only vote completes the ballot');
 clock=solo.resultAt+1;solo=await req(soloPath,3);assert.equal(solo.phase,'finished');assert.equal(solo.players[0].score,1000);
 console.log('PASS solo start, ready, immediate vote lock, reveal and final score.');
+
+// Missing scores/names and dead photos cannot enter a drawn deck.
+clock+=21000;
+const bad=fixture.slice(0,5).map((p,i)=>({...p,code:String(5000000000000+i)}));
+bad[0].product_name=bad[0].product_name_fr='Non renseigné';bad[1].nutriscore_grade='unknown';bad[2].image_front_url='';bad[3].image_front_url='https://images.openfoodfacts.org/dead.jpg';bad[4].image_front_url='https://images.openfoodfacts.org/html.jpg';
+const candidates=[...bad,...fixture.slice(0,8)];
+sqlite.exec('DELETE FROM off_cache');
+globalThis.fetch=async(url,options)=>{if(options?.method==='HEAD')return new Response(null,{status:String(url).includes('dead')?404:200,headers:{'Content-Type':String(url).includes('html')?'text/html':'image/jpeg'}});return Response.json({products:candidates,hits:candidates});};
+let filtered=await req('',3,{name:'Filter',avatar:'🦊',count:8,novaCount:0,ecoCount:0,country:'canada',seconds:20,readySeconds:30,operation:'d'.repeat(32)});filtered=await req('/'+filtered.id+'/start',3,{});
+const filteredDeck=JSON.parse(sqlite.prepare('SELECT state FROM rooms WHERE id=?').get(filtered.id).state).deck;
+assert.equal(filteredDeck.length,8);assert(filteredDeck.every(p=>p.code.startsWith('4')),'bad records replaced by valid candidates');
+console.log('PASS missing name/score/photo, 404 and non-image responses excluded; replacement deck complete.');
+
+sqlite.exec('DELETE FROM off_cache');
+globalThis.fetch=async(url,options)=>options?.method==='HEAD'?new Response(null,{status:404}):Response.json({products:fixture,hits:fixture});
+await req('/'+filtered.id+'/skip',3,{},409);
+let unavailable=await req('',3,{name:'Unavailable',avatar:'🦊',count:1,novaCount:0,ecoCount:0,country:'canada',seconds:20,readySeconds:30,operation:'c'.repeat(32)});
+await req('/'+unavailable.id+'/start',3,{},503);assert.equal((await req('/'+unavailable.id,3)).phase,'lobby','failed photo verification preserves room');
+console.log('PASS all photos unavailable: no incomplete game starts and room survives.');

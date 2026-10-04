@@ -45,7 +45,8 @@ function normalized(p){const o={};for(const k of fields)if(p[k]!=null)o[k]=p[k];
 if(o.ecoscore_data){const e=o.ecoscore_data;o.ecoscore_data={grade:e.grade,score:e.score,agribalyse:{score:e.agribalyse?.score,name_fr:e.agribalyse?.name_fr},adjustments:Object.fromEntries(Object.entries(e.adjustments||{}).map(([k,v])=>[k,{value:v.value,warning:v.warning}]))};}
 if(o.nutriscore&&o.nutriscore_version)o.nutriscore={[String(o.nutriscore_version)]:o.nutriscore[String(o.nutriscore_version)]};
 return o;}
-function eligible(p,country,m){const score=m==='nova'?[1,2,3,4].includes(p.nova_group):/^[a-e]$/.test(p[m==='eco'?'ecoscore_grade':'nutriscore_grade']||'');return score&&/^\d{4,24}$/.test(p.code)&&!!(p.product_name_fr||p.product_name)&&/^https:\/\/images\.openfoodfacts\.org\//.test(p.image_front_url||'')&&(country==='world'||p.countries_tags?.includes('en:'+country))&&(m!=='nutri'||['energy-kcal_100g','energy-kj_100g','sugars_100g','salt_100g','saturated-fat_100g','proteins_100g'].filter(k=>Number.isFinite(p.nutriments?.[k])).length>=4);}
+function meaningful(value){return typeof value==='string'&&value.trim().length>1&&!/^(?:non? renseign[ée]s?|unknown|undefined|n\/a|not (?:specified|available)|produit inconnu)$/i.test(value.trim());}
+function eligible(p,country,m){const score=m==='nova'?[1,2,3,4].includes(p.nova_group):/^[a-e]$/.test(p[m==='eco'?'ecoscore_grade':'nutriscore_grade']||'');return score&&/^\d{4,24}$/.test(p.code)&&meaningful(p.product_name_fr||p.product_name)&&/^https:\/\/images\.openfoodfacts\.org\//.test(p.image_front_url||'')&&(country==='world'||p.countries_tags?.includes('en:'+country))&&(m!=='nutri'||['energy-kcal_100g','energy-kj_100g','sugars_100g','salt_100g','saturated-fat_100g','proteins_100g'].filter(k=>Number.isFinite(p.nutriments?.[k])).length>=4);}
 const shuffle=a=>{for(let i=a.length-1;i>0;i--){const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);const j=bytes[0]%(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;};
 async function offJSON(url,timeout=12000){const r=await fetch(url,{headers:{'User-Agent':'NutriDeckGym/0.7 (https://github.com/jutrasimon/nutrideck)','Accept':'application/json'},signal:AbortSignal.timeout(timeout)});if(!r.ok||!r.headers.get('content-type')?.includes('json'))throw Error('OFF unavailable');return r.json();}
 function allocate(pool,s){
@@ -60,7 +61,20 @@ if(!allocate(pool,s)){const requested=[s.count?'nutriscore_grade:(a OR b OR c OR
 for(const pg of [page,1]){const u=new URL('https://search.openfoodfacts.org/search');u.search=new URLSearchParams({q,page:String(pg),page_size:'100',langs:'fr,en',fields:fields.join(',')});try{const data=await offJSON(u,16000);pool=[...new Map([...pool,...(data.hits||[]).map(normalized)].map(p=>[p.code,p])).values()];source='Open Food Facts · recherche';if(allocate(pool,s))break;}catch{if(pg===1&&pool.length===0)fail('Open Food Facts ne répond pas. Le salon est conservé; réessaie le tirage.',503);}}}
 if(!allocate(pool,s))fail(`Pas assez de fiches avec photo et scores pour ${COUNTRIES[country]}. Réduis les quantités, désactive un bonus ou réessaie. Aucun produit d’un autre pays n’a été ajouté.`,503);
 await db(env).prepare('INSERT INTO off_cache(id,payload,expires_at) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,expires_at=excluded.expires_at').bind(key,JSON.stringify(pool),now+3600000).run();}
-const deck=allocate(shuffle(pool.slice()),s),modes=schedule(s);let cursor=0;await Promise.all(Array.from({length:Math.min(5,deck.length)},async()=>{while(cursor<deck.length){const i=cursor++,p=deck[i];try{const d=await offJSON('https://world.openfoodfacts.org/api/v2/product/'+p.code+'.json?fields='+fields.join(','),4500);if(d.product){const fresh=normalized(d.product);if(fresh.code===p.code&&eligible(fresh,country,modes[i]))deck[i]=fresh;}}catch{}}}));return{deck,source};}
+// Revalidate selected records and actual image availability before committing the deck.
+const checked=new Set(),photos=new Map();pool=shuffle(pool.slice());
+for(let attempt=0;attempt<4;attempt++){
+ const deck=allocate(pool,s);if(!deck)break;let cursor=0;
+ await Promise.all(Array.from({length:Math.min(6,deck.length)},async()=>{while(cursor<deck.length){const p=deck[cursor++];if(checked.has(p.code))continue;checked.add(p.code);let fresh=p;
+ try{const d=await offJSON('https://world.openfoodfacts.org/api/v2/product/'+p.code+'.json?fields='+fields.join(','),4500);if(d.status===0){pool=pool.filter(x=>x.code!==p.code);continue;}if(d.product){fresh=normalized(d.product);if(fresh.code!==p.code){pool=pool.filter(x=>x.code!==p.code);continue;}}}catch{}
+ let available=false;const url=fresh.image_front_url;
+ if(/^https:\/\/images\.openfoodfacts\.org\//.test(url||'')){if(!photos.has(url))photos.set(url,(async()=>{try{const r=await fetch(url,{method:'HEAD',redirect:'error',signal:AbortSignal.timeout(4500)});return r.ok&&/^image\//i.test(r.headers.get('content-type')||'');}catch{return false;}})());available=await photos.get(url);}
+ pool=available?pool.map(x=>x.code===p.code?fresh:x):pool.filter(x=>x.code!==p.code);
+ }}));
+ const verified=allocate(pool,s);if(verified&&verified.every(p=>checked.has(p.code)))return{deck:verified,source};
+}
+fail('Pas assez de produits renseignés avec une photo accessible pour ce tirage. Réduis les quantités ou réessaie. Aucun produit incomplet n’a été ajouté.',503);}
+
 const number=n=>Number(n).toLocaleString('fr-CA',{maximumFractionDigits:2});
 const finite=n=>typeof n==='number'&&Number.isFinite(n);
 const NOVA_TEXT={1:'Aliment non transformé ou peu transformé',2:'Ingrédient culinaire transformé',3:'Aliment transformé',4:'Produit ultra-transformé'};

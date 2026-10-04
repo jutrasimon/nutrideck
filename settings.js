@@ -150,6 +150,7 @@ function buildLab() {
       h('div', { id: 'pv-card', class: 'pv-card' }),
       h('div', { class: 'pv-side' },
         h('h1', {}, 'Atelier'),
+        h('a', { href: 'card-gym.html', class: 'primary-btn' }, 'Ouvrir le gym de cartes ↗'),
         h('p', {}, 'Règle la carte à ton goût : tout s’applique en direct sur la table et dans les jeux.'),
         h('div', { class: 'pv-btns' },
           h('button', { class: 'ghost-btn', onclick: () => { pvFlipped = !pvFlipped; $('#pv-card .card')?.classList.toggle('flipped', pvFlipped); } }, '↻ Retourner'),

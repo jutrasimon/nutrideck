@@ -13,8 +13,8 @@ const { WebSocketServer } = require('ws');
 const PORT = process.env.PORT || 5177;
 const UA = 'NutriDeck/0.1' + (process.env.OFF_CONTACT ? ` (${process.env.OFF_CONTACT})` : '');
 const FIELDS = 'code,product_name,generic_name,brands,quantity,image_front_url,image_front_small_url,nutriscore_grade,nova_group,ecoscore_grade,nutriments,ingredients_text,allergens_tags,additives_n,additives_tags';
-const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
-const PUBLIC = new Set(['index.html', 'styles.css', 'app.js', 'settings.js', 'games.js', 'online.js', 'main.js']);
+const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.ico': 'image/x-icon' };
+const PUBLIC = new Set(['index.html', 'styles.css', 'app.js', 'settings.js', 'games.js', 'online.js', 'main.js', 'card-gym.html', 'card-gym.css', 'card-gym.js', 'gym-products.json', 'gym-assets/3017620422003.jpg', 'gym-assets/5449000000996.jpg', 'gym-assets/3175680011480.jpg']);
 
 /* ───────────── Relais Open Food Facts ───────────── */
 const cache = new Map();                       // clé → { t, data }

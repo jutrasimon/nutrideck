@@ -1,5 +1,6 @@
 'use strict';
 (() => {
+  const rendererOnly=document.currentScript?.hasAttribute('data-renderer-only');
   const $ = s => document.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -32,7 +33,7 @@
   const fmt = v => v==null || !Number.isFinite(Number(v)) ? '—' : Number(v).toLocaleString('fr-CA',{maximumFractionDigits:2});
   const grade = g => /^[a-e]$/i.test(g || '') ? g.toUpperCase() : '—';
   let noticeTimer;
-  function notice(text){$('#notice').textContent=text;$('#notice').style.display='block';clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$('#notice').style.display='none',3500);}
+  function notice(text){if(!$('#notice'))return;$('#notice').textContent=text;$('#notice').style.display='block';clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$('#notice').style.display='none',3500);}
   function save(){try{localStorage.setItem(key,JSON.stringify(cfg));}catch{notice('Sauvegarde locale indisponible. Exporte ton style.');}}
   function savePlay(){try{localStorage.setItem(playKey,JSON.stringify({favorites:play.favorites.filter(c=>!c.startsWith('local-')),slots:play.slots.map(c=>c?.startsWith('local-')?null:c)}));}catch{notice('Favoris et emplacements conservés pour cette session seulement.');}}
   function product(p=products[current]||products[0]){p=clone(p);if(stress==='long')p.name='Granola croustillant aux amandes, chocolat noir et petits fruits du Québec';if(stress==='noimage')p.img='';if(stress==='broken')p.img='gym-assets/image-inaccessible.jpg';if(stress==='missing'){p.n={};p.nutri=null;p.eco=null;p.nova=null;p.ingredients='';p.allergens=[];p.traces=[];p.adds=[];p.additives=null;}return p;}
@@ -40,25 +41,24 @@
   function safeImage(url){if(!url)return '';if(localURLs.has(url))return url;try{const u=new URL(url,location.href);return ['http:','https:'].includes(u.protocol)?u.href:'';}catch{return '';}}
   const heartIcon='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>';
   function updateFavorites(){
-    $('#fav-count').textContent=play.favorites.length;
+    if($('#fav-count'))$('#fav-count').textContent=play.favorites.length;
     $$('.favorite').forEach(b=>{const on=play.favorites.includes(b.dataset.code);b.setAttribute('aria-pressed',on);b.setAttribute('aria-label',on?'Retirer des favoris':'Ajouter aux favoris');b.title=on?'Retirer des favoris':'Ajouter aux favoris';b.classList.toggle('on',on);b.innerHTML=heartIcon;});
-    $('#favorites-filter').setAttribute('aria-pressed',favoritesOnly);
+    $('#favorites-filter')?.setAttribute('aria-pressed',favoritesOnly);
   }
-  function favorite(code){const i=play.favorites.indexOf(code);if(i<0)play.favorites.push(code);else play.favorites.splice(i,1);savePlay();updateFavorites();if(favoritesOnly)render();}
+  function favorite(code){const i=play.favorites.indexOf(code);if(i<0)play.favorites.push(code);else play.favorites.splice(i,1);savePlay();updateFavorites();if(!rendererOnly&&favoritesOnly)render();}
   // Measure the actual title at its rendered width. No line-clamp and no ellipsis.
   function fitTitle(el){
     const card=el.closest('.nd-card');const width=card?.clientWidth;if(!width||!el.clientWidth)return;
-    const max=width*.081*(Number(card.style.getPropertyValue('--font'))||1);
-    let lo=.5, hi=max;
-    el.style.fontSize=max+'px';
-    for(let i=0;i<13;i++){const size=(lo+hi)/2;el.style.fontSize=size+'px';const line=parseFloat(getComputedStyle(el).lineHeight);if(el.scrollHeight<=line*2+1&&el.scrollWidth<=el.clientWidth+1)lo=size;else hi=size;}
-    el.style.fontSize=Math.floor(lo*10)/10+'px';el.dataset.fitted='true';
+    window.fitCardTitle(el,width*.12*(Number(card.style.getPropertyValue('--font'))||1));
   }
   const ro=typeof ResizeObserver==='function'?new ResizeObserver(entries=>{for(const e of entries)$$('.nd-title',e.target).forEach(fitTitle);}):null;
   function fitAll(){ $$('.nd-title').forEach(fitTitle); }
+  // Open Food Facts SVG assets: html/images/attributes/src/{nova-group-*,ecoscore-*}.svg
+  const novaColors={1:'#00aa00',2:'#ffcc00',3:'#ff6600',4:'#ff0000'};
+  const ecoColors={A:'#1e8f4e',B:'#2ecc71',C:'#f5c100',D:'#ef7e1a',E:'#de4523'};
   function frontHTML(p,c){
     const f=c.fields,m=stats[c.metric],n=p.n?.[c.metric],img=safeImage(p.img);
-    return `<div class="nd-face nd-front"><div class="nd-top"><span class="nd-brand">${f.brand?esc(p.brand||'Marque non renseignée'):''}</span></div><h3 class="nd-title">${esc(p.name)}</h3><div class="nd-photo">${img?`<img src="${esc(img)}" alt="${esc(p.name)}" draggable="false">`:'<div class="nd-placeholder"><span>▧</span>Photo non disponible</div>'}</div><div class="nd-data">${f.metric?`<div class="nd-metric"><span>${m[0]}</span><b>${fmt(n)}${n!=null?`<em>${m[1]}</em>`:''}</b></div>`:''}<div class="nd-scores">${f.nutri?`<span class="nd-score grade">Nutri<b>${grade(p.nutri)}</b></span>`:''}${f.nova?`<span class="nd-score">NOVA<b>${([1,2,3,4].includes(Number(p.nova))?Number(p.nova):'—')}</b></span>`:''}${f.eco?`<span class="nd-score">Éco<b>${grade(p.eco)}</b></span>`:''}</div><div class="nd-foot">${p.demo?'Données de démonstration':'Pour 100 g / 100 ml'}</div></div></div>`;
+    return `<div class="nd-face nd-front"><div class="nd-top"><span class="nd-brand">${f.brand?esc(p.brand||'Marque non renseignée'):''}</span></div><h3 class="nd-title">${esc(p.name)}</h3><div class="nd-photo">${img?`<img src="${esc(img)}" alt="${esc(p.name)}" draggable="false">`:'<div class="nd-placeholder"><span>▧</span>Photo non disponible</div>'}</div><div class="nd-data">${f.metric?`<div class="nd-metric ${p.masked?'masked':''}"><span>${m[0]}</span><b>${p.masked?'Masqué':fmt(n)}${n!=null?`<em>${m[1]}</em>`:''}</b></div>`:''}<div class="nd-scores">${f.nutri?`<span class="nd-score grade ${p.masked?'masked':''}">Nutri<b>${p.masked?'••':grade(p.nutri)}</b></span>`:''}${f.nova?`<span class="nd-score ${p.masked?'masked':novaColors[p.nova]?'colored':''}" style="--score-color:${novaColors[p.nova]||'transparent'}">NOVA<b>${p.masked?'••':([1,2,3,4].includes(Number(p.nova))?Number(p.nova):'—')}</b></span>`:''}${f.eco?`<span class="nd-score ${p.masked?'masked':ecoColors[grade(p.eco)]?'colored':''}" style="--score-color:${ecoColors[grade(p.eco)]||'transparent'}">Éco<b>${p.masked?'••':grade(p.eco)}</b></span>`:''}</div><div class="nd-foot">${p.demo?'Données de démonstration':'Pour 100 g / 100 ml'}</div></div></div>`;
   }
   function additiveHTML(p){
     const adds=p.adds||[];
@@ -67,7 +67,7 @@
   }
   function backHTML(p){
     const chips=a=>(a||[]).map(x=>`<span>${esc(x)}</span>`).join('');
-    return `<div class="nd-face nd-back"><div class="nd-scroll" tabindex="0" aria-label="Détails du produit, faire défiler"><h3 class="nd-title">${esc(p.name)}</h3><div class="nd-table">${Object.entries(stats).map(([k,[n,u]])=>`<div class="nd-row"><span>${n}</span><b>${fmt(p.n?.[k])}${p.n?.[k]!=null?' '+u:''}</b></div>`).join('')}</div><div class="nd-foot">Pour 100 g / 100 ml · selon la source</div><section class="nd-section ingredients"><h4>Ingrédients</h4><p>${esc(p.ingredients||'Non renseignés')}</p></section><section class="nd-section allergens"><h4>Allergènes <span>${p.allergens?.length||'—'}</span></h4>${p.allergens?.length?`<div class="allergen-chips">${chips(p.allergens)}</div>`:'<p class="nd-muted">Non renseignés. Vérifier l’emballage.</p>'}${p.traces?.length?`<h5>Traces possibles</h5><div class="allergen-chips traces">${chips(p.traces)}</div>`:''}</section>${additiveHTML(p)}<div class="nd-source">${p.local?'IMAGE LOCALE · TEST VISUEL':p.demo?'DÉMONSTRATION':`<a href="https://world.openfoodfacts.org/product/${encodeURIComponent(p.code)}" target="_blank" rel="noopener">Open Food Facts</a> · ${esc(p.code)}`}${p.qty?`<span>${esc(p.qty)}</span>`:''}</div></div><div class="scroll-cue" aria-hidden="true">Détails en dessous ↓</div></div>`;
+    return `<div class="nd-face nd-back"><div class="nd-scroll" tabindex="0" aria-label="Détails du produit, faire défiler"><h3 class="nd-title">${esc(p.name)}</h3>${p.masked?'<p class="nd-mask-note">Valeurs nutritionnelles et scores dévoilés après le vote.</p>':''}<div class="nd-table">${Object.entries(stats).map(([k,[n,u]])=>`<div class="nd-row ${p.masked?'masked':''}"><span>${n}</span><b>${p.masked?'Masqué':fmt(p.n?.[k])}${p.n?.[k]!=null?' '+u:''}</b></div>`).join('')}</div><div class="nd-foot">Pour 100 g / 100 ml · selon la source</div><section class="nd-section ingredients"><h4>Ingrédients</h4><p>${esc(p.ingredients||'Non renseignés')}</p></section><section class="nd-section allergens"><h4>Allergènes <span>${p.allergens?.length||'—'}</span></h4>${p.allergens?.length?`<div class="allergen-chips">${chips(p.allergens)}</div>`:'<p class="nd-muted">Non renseignés. Vérifier l’emballage.</p>'}${p.traces?.length?`<h5>Traces possibles</h5><div class="allergen-chips traces">${chips(p.traces)}</div>`:''}</section>${additiveHTML(p)}<div class="nd-source">${p.local?'IMAGE LOCALE · TEST VISUEL':p.demo?'DÉMONSTRATION':p.masked?'Open Food Facts · fiche masquée':`<a href="https://world.openfoodfacts.org/product/${encodeURIComponent(p.code)}" target="_blank" rel="noopener">Open Food Facts</a> · ${esc(p.code)}`}${p.qty?`<span>${esc(p.qty)}</span>`:''}</div></div><div class="scroll-cue" aria-hidden="true">Détails en dessous ↓</div></div>`;
   }
   const mysteryHTML=()=>'<div class="nd-face nd-mystery"><span class="seal">N</span><b>NutriDeck</b><small>À VOUS DE JOUER</small></div>';
   let drag=null;
@@ -97,7 +97,7 @@
     d.setFace(initialFace,false);
     d.querySelector('.favorite').dataset.code=p.code;d.querySelector('.favorite').onclick=e=>{e.stopPropagation();favorite(p.code);};
     d.querySelector('.flip-button').onclick=e=>{e.stopPropagation();d.setFace(d.dataset.face==='front'?'back':'front');};
-    d.querySelector('.grip').onclick=e=>{e.stopPropagation();if(drag?.moved||Date.now()<(d._suppressClick||0))return;armed={code:p.code,slot};if(view!=='slots')view='slots';render();$('.slot-board')?.scrollIntoView({behavior:reduced()?'instant':'smooth',block:'nearest'});$('.empty-slot,.drop-choose')?.focus({preventScroll:true});notice('Choisis un emplacement pour déposer la carte.');};
+    d.querySelector('.grip').hidden=rendererOnly;d.querySelector('.grip').onclick=e=>{e.stopPropagation();if(drag?.moved||Date.now()<(d._suppressClick||0))return;armed={code:p.code,slot};if(view!=='slots')view='slots';render();$('.slot-board')?.scrollIntoView({behavior:reduced()?'instant':'smooth',block:'nearest'});$('.empty-slot,.drop-choose')?.focus({preventScroll:true});notice('Choisis un emplacement pour déposer la carte.');};
     d.addEventListener('click',e=>{if(e.target.closest('button,a')||Date.now()<(d._suppressClick||0))return;const sel=window.getSelection();if(sel?.type==='Range'&&d.contains(sel.anchorNode))return;d.setFace(d.dataset.face==='front'?'back':'front');});
     let press=null;
     d.addEventListener('pointerdown',e=>{press={x:e.clientX,y:e.clientY,scroll:d.querySelector('.nd-scroll')?.scrollTop||0};});
@@ -105,8 +105,18 @@
     d.addEventListener('pointercancel',()=>{press=null;d._suppressClick=Date.now()+350;});
     d.addEventListener('pointermove',e=>{if(!c.tilt||reduced()||drag||d.classList.contains('is-turning')||e.pointerType!=='mouse')return;const r=d.getBoundingClientRect();const x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;d.style.setProperty('--rx',-y*7+'deg');d.style.setProperty('--ry',x*9+'deg');d.style.setProperty('--shine-x',(x+.5)*100+'%');});
     d.addEventListener('pointerleave',()=>{d.style.setProperty('--rx','0deg');d.style.setProperty('--ry','0deg');});
-    d.addEventListener('pointerdown',e=>startDrag(e,d,p,slot));ro?.observe(d);return d;
+    d.addEventListener('pointerdown',e=>{if(!rendererOnly)startDrag(e,d,p,slot);});ro?.observe(d);return d;
   }
+  window.NutriDeckCards={
+    create(raw,{masked=false}={}){
+      const p=normalize(raw);if(masked){p.n={};p.nutri=null;p.nova=null;p.eco=null;p.masked=true;}
+      const card=makeCard(p,{...cfg,size:240,tilt:false,scatter:false},{width:240,initialFace:'front'});
+      updateFavorites();requestAnimationFrame(updateFavorites);return card;
+    },
+    dispose(card){if(card){ro?.unobserve(card);clearTimeout(card._turnTimer);}},
+    fit:fitAll
+  };
+  if(rendererOnly){document.fonts?.ready.then(fitAll);window.addEventListener('resize',fitAll);return;}
   function startDrag(e,d,p,slot){
     if(e.button!==0||drag||e.target.closest('a,.favorite,.flip-button')||((e.pointerType==='touch'||d.dataset.face==='back')&&!e.target.closest('.grip')))return;
     if(d.dataset.face==='back'&&!e.target.closest('.grip'))return;

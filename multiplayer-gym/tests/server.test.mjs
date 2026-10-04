@@ -7,7 +7,7 @@ const raw=JSON.parse(readFileSync('public/gym-products.json'))[0];const fixture=
 const urls=[];globalThis.fetch=async (url,options)=>{urls.push(String(url));if(options?.method==='HEAD')return new Response(null,{headers:{'Content-Type':'image/jpeg'}});return Response.json({products:fixture,hits:fixture})};
 let s=await req('',0,{name:'Simon',avatar:'🦊',count:2,novaCount:1,ecoCount:1,country:'canada',readySeconds:15,seconds:20,operation:'f'.repeat(32)}),id=s.id;
 await Promise.all([req('/'+id+'/join',1,{name:'Paul',avatar:'🐼'}),req('/'+id+'/join',2,{name:'Kattie',avatar:'🐸'})]);
-s=await req('/'+id+'/start',0,{});assert.equal(s.phase,'intro');assert.equal(s.mode,'nutri');assert.equal(s.product,null);assert(urls[0].includes('countries_tags=en%3Acanada'),'country query');const saved=()=>JSON.parse(sqlite.prepare('SELECT state FROM rooms WHERE id=?').get(id).state);assert(saved().deck.every(p=>p.countries_tags.includes('en:canada')),'never broadens country');assert.equal(new Set(saved().deck.map(p=>p.code)).size,4,'no repeated products across phases');
+s=await req('/'+id+'/start',0,{});assert.equal(s.phase,'intro');assert.equal(s.mode,'nutri');assert.equal(s.product,null);assert(new URL(urls[0]).searchParams.get('q').includes('countries_tags:"en:canada"'),'country query');const saved=()=>JSON.parse(sqlite.prepare('SELECT state FROM rooms WHERE id=?').get(id).state);assert(saved().deck.every(p=>p.countries_tags.includes('en:canada')),'never broadens country');assert.equal(new Set(saved().deck.map(p=>p.code)).size,4,'no repeated products across phases');
 async function ready(who){return req('/'+id+'/ready',who,{gameId:s.gameId,step:s.step,ready:true});}
 const introStep=s.step;s=await ready(0);assert.equal(s.phase,'intro');await ready(1);s=await ready(2);assert.equal(s.phase,'vote');await req('/'+id+'/ready',0,{gameId:s.gameId,step:introStep},409);
 async function cast(who,choice){return req('/'+id+'/vote',who,{gameId:s.gameId,round:s.round,choice});}
@@ -59,3 +59,13 @@ for(const sparse of [true,false]){
  short=await req('/'+short.id+'/vote',3,{gameId:short.gameId,round:short.round,choice:'C'});clock=short.resultAt+1;short=await req('/'+short.id,3);assert.equal(short.phase,'finished');assert.equal(short.lastFinal.total,1);
 }
 console.log('PASS 6 requested -> 1 valid: short search pool and failed photos, absent bonuses skipped, correct final.');
+// Service errors are not reported as a shortage; HEAD rejection gets a GET retry.
+for(const scenario of ['head-rejected','image-outage','search-outage']){
+ sqlite.exec('DELETE FROM off_cache');const calls=[];
+ globalThis.fetch=async(url,opts)=>{calls.push([String(url),opts?.method||'GET']);if(String(url).includes('images.openfoodfacts.org'))return scenario==='head-rejected'?new Response(null,{status:opts?.method==='HEAD'?405:200,headers:{'Content-Type':'image/jpeg'}}):new Response(null,{status:503});if(scenario==='search-outage')return new Response(null,{status:503});return Response.json({products:fixture,hits:fixture});};
+ let test=await req('',3,{name:'Network',avatar:'🦊',count:6,novaCount:0,ecoCount:0,country:'canada',seconds:20,readySeconds:30,operation:({ 'head-rejected':'3','image-outage':'4','search-outage':'5'}[scenario]).repeat(32)});
+ const result=await req('/'+test.id+'/start',3,{},scenario==='head-rejected'?200:503);
+ if(scenario==='head-rejected'){assert.equal(result.total,6);assert(calls.some(([url,method])=>url.includes('images.')&&method==='GET'));assert(!calls.some(([url])=>url.includes('/api/v2/search')),'working search never calls legacy search');}
+ else assert(result.error.includes(scenario==='image-outage'?'Vérification des photos indisponible':'Open Food Facts est indisponible'));
+}
+console.log('PASS preferred search, HEAD-to-GET fallback, distinct search and photo outages.');

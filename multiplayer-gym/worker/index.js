@@ -58,27 +58,41 @@ if(picked[0]<0)return null;
 const counts={count:0,novaCount:0,ecoCount:0},keys={nutri:'count',nova:'novaCount',eco:'ecoCount'};
 const deck=picked.flatMap((i,slot)=>{if(i<0)return [];counts[keys[slots[slot]]]++;return [pool[i]];});
 return{deck,counts};}
-async function draw(env,s){const country=s.country,now=Date.now(),page=1+Math.floor(Math.random()*75),key='v7-off-'+country+'-'+page;const cached=await db(env).prepare('SELECT payload FROM off_cache WHERE id=? AND expires_at>?').bind(key,now).first();let pool=cached?JSON.parse(cached.payload):[],source='Open Food Facts';
-if(!allocate(pool,s)){const lease=await db(env).prepare('INSERT INTO off_cache(id,payload,expires_at) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET expires_at=excluded.expires_at WHERE off_cache.expires_at<?').bind('search-lease','{}',now+20000,now).run();if(!lease.meta.changes)fail('Un tirage est déjà en cours. Réessaie dans quelques secondes.',429);
-try{const u=new URL('https://world.openfoodfacts.org/api/v2/search');u.search=new URLSearchParams({page:String(page),page_size:'100',sort_by:'unique_scans_n',fields:fields.join(','),...(country==='world'?{}:{countries_tags:'en:'+country})});const data=await offJSON(u,9000);pool=(data.products||[]).map(normalized);}catch{pool=[];}
-if(!allocate(pool,s)){const requested=[s.count?'nutriscore_grade:(a OR b OR c OR d OR e)':null,s.novaCount?'nova_groups:(1 OR 2 OR 3 OR 4)':null,s.ecoCount?'ecoscore_grade:(a OR b OR c OR d OR e)':null].filter(Boolean).join(' OR ');const q=(country==='world'?'':`countries_tags:"en:${country}" AND `)+'('+requested+')';
-for(const pg of [page,1]){const u=new URL('https://search.openfoodfacts.org/search');u.search=new URLSearchParams({q,page:String(pg),page_size:'100',langs:'fr,en',fields:fields.join(',')});try{const data=await offJSON(u,16000);pool=[...new Map([...pool,...(data.hits||[]).map(normalized)].map(p=>[p.code,p])).values()];source='Open Food Facts · recherche';if(allocate(pool,s))break;}catch{if(pg===1&&pool.length===0)fail('Open Food Facts ne répond pas. Le salon est conservé; réessaie le tirage.',503);}}}
-if(!allocate(pool,s,true))fail('Aucun produit admissible. Réessaie.',503);
-await db(env).prepare('INSERT INTO off_cache(id,payload,expires_at) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,expires_at=excluded.expires_at').bind(key,JSON.stringify(pool),now+3600000).run();}
+async function checkPhoto(url){
+ // Some image hosts refuse HEAD; verify with a small GET before rejecting them.
+ for(const method of ['HEAD','GET']){let target=url;try{for(let redirects=0;redirects<3;redirects++){
+  const r=await fetch(target,{method,redirect:'manual',headers:method==='GET'?{Range:'bytes=0-511'}:{},signal:AbortSignal.timeout(4500)});
+  if(r.status>=300&&r.status<400){const next=new URL(r.headers.get('location')||'',target);await r.body?.cancel();if(next.protocol!=='https:'||next.hostname!=='images.openfoodfacts.org')return 'missing';target=next.href;continue;}
+  const status=r.status,valid=r.ok&&/^image\//i.test(r.headers.get('content-type')||'');await r.body?.cancel();
+  if(valid)return 'ok';if(status===404||status===410||r.ok)return 'missing';break;
+ }}catch{}}
+ return 'unavailable';
+}
+async function draw(env,s){const country=s.country,now=Date.now(),page=1+Math.floor(Math.random()*20),key='v8-off-'+country+'-'+page;const cached=await db(env).prepare('SELECT payload FROM off_cache WHERE id=? AND expires_at>?').bind(key,now).first();let pool=cached?JSON.parse(cached.payload):[],source='Open Food Facts · recherche',searchSucceeded=!!cached;
+if(!allocate(pool,s)){
+ const requested=[s.count?'nutriscore_grade:(a OR b OR c OR d OR e)':null,s.novaCount?'nova_groups:(1 OR 2 OR 3 OR 4)':null,s.ecoCount?'ecoscore_grade:(a OR b OR c OR d OR e)':null].filter(Boolean).join(' OR ');
+ const q=(country==='world'?'':`countries_tags:"en:${country}" AND `)+'('+requested+')';
+ // Search-a-licious is the primary source; page one rescues sparse random pages.
+ for(const pg of [...new Set([page,1])]){const u=new URL('https://search.openfoodfacts.org/search');u.search=new URLSearchParams({q,page:String(pg),page_size:'100',langs:'fr,en',fields:fields.join(',')});try{const data=await offJSON(u,12000);if(!Array.isArray(data.hits))throw Error('Invalid search response');searchSucceeded=true;pool=[...new Map([...pool,...data.hits.map(normalized)].map(p=>[p.code,p])).values()];if(allocate(pool,s))break;}catch{}}
+ if(!allocate(pool,s)){try{const u=new URL('https://world.openfoodfacts.org/api/v2/search');u.search=new URLSearchParams({page:'1',page_size:'100',sort_by:'unique_scans_n',fields:fields.join(','),...(country==='world'?{}:{countries_tags:'en:'+country})});const data=await offJSON(u,4500);if(!Array.isArray(data.products))throw Error('Invalid search response');searchSucceeded=true;pool=[...new Map([...pool,...data.products.map(normalized)].map(p=>[p.code,p])).values()];}catch{}}
+ if(!searchSucceeded)fail('Open Food Facts est indisponible. Réessaie dans un instant.',503);
+ if(!allocate(pool,s,true))fail('Aucun produit admissible trouvé dans ce tirage. Réessaie.',503);
+ await db(env).prepare('INSERT INTO off_cache(id,payload,expires_at) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,expires_at=excluded.expires_at').bind(key,JSON.stringify(pool),now+3600000).run();
+}
 // Revalidate selected records and actual image availability before committing the deck.
-const checked=new Set(),photos=new Map();pool=shuffle(pool.slice());
+const checked=new Set(),photos=new Map();let photoUnavailable=false;pool=shuffle(pool.slice());
 for(let attempt=0;attempt<4;attempt++){
  const selection=allocate(pool,s,true);if(!selection)break;const deck=selection.deck;let cursor=0;
  await Promise.all(Array.from({length:Math.min(6,deck.length)},async()=>{while(cursor<deck.length){const p=deck[cursor++];if(checked.has(p.code))continue;checked.add(p.code);let fresh=p;
- try{const d=await offJSON('https://world.openfoodfacts.org/api/v2/product/'+p.code+'.json?fields='+fields.join(','),4500);if(d.status===0){pool=pool.filter(x=>x.code!==p.code);continue;}if(d.product){fresh=normalized(d.product);if(fresh.code!==p.code){pool=pool.filter(x=>x.code!==p.code);continue;}}}catch{}
+ try{const d=await offJSON('https://world.openfoodfacts.org/api/v2/product/'+p.code+'.json?fields='+fields.join(','),1500);if(d.status===0){pool=pool.filter(x=>x.code!==p.code);continue;}if(d.product){fresh=normalized(d.product);if(fresh.code!==p.code){pool=pool.filter(x=>x.code!==p.code);continue;}}}catch{}
  let available=false;const url=fresh.image_front_url;
- if(/^https:\/\/images\.openfoodfacts\.org\//.test(url||'')){if(!photos.has(url))photos.set(url,(async()=>{try{const r=await fetch(url,{method:'HEAD',redirect:'error',signal:AbortSignal.timeout(4500)});return r.ok&&/^image\//i.test(r.headers.get('content-type')||'');}catch{return false;}})());available=await photos.get(url);}
+ if(/^https:\/\/images\.openfoodfacts\.org\//.test(url||'')){if(!photos.has(url))photos.set(url,checkPhoto(url));const result=await photos.get(url);available=result==='ok';photoUnavailable ||= result==='unavailable';}
  pool=available?pool.map(x=>x.code===p.code?fresh:x):pool.filter(x=>x.code!==p.code);
  }}));
  const verified=allocate(pool,s,true);if(verified&&verified.deck.every(p=>checked.has(p.code)))return{...verified,source};
 }
 const fallback=allocate(pool.filter(p=>checked.has(p.code)),s,true);if(fallback)return{...fallback,source};
-fail('Aucun produit avec photo accessible. Réessaie.',503);}
+fail(photoUnavailable?'Vérification des photos indisponible. Réessaie dans un instant.':'Aucune photo accessible dans ce tirage. Réessaie.',503);}
 
 const number=n=>Number(n).toLocaleString('fr-CA',{maximumFractionDigits:2});
 const finite=n=>typeof n==='number'&&Number.isFinite(n);

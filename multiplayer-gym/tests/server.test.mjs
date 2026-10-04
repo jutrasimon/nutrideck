@@ -19,3 +19,13 @@ s=await req('/'+id+'/lobby',0,{});assert.equal(JSON.stringify(s.lastFinal),final
 // Existing v0.6 rooms still open correctly after this deployment.
 const old={id:'9'.repeat(32),host:'old',phase:'finished',count:1,seconds:20,round:0,deck:[raw],players:[{id:'old',name:'Old',avatar:'🦊',token:saved().players[0].token,score:1000,base:0,vote:'A',award:1000}],createdAt:clock};sqlite.prepare('INSERT INTO rooms VALUES(?,?,0,?)').run(old.id,JSON.stringify(old),clock);const legacy=await req('/'+old.id);assert.equal(legacy.lastFinal.players[0].score,1000);assert.equal(legacy.lastFinal.statsAvailable,false);
 console.log('PASS country filter, unique deck, 3 phases, ready all/timers, stale gate/game protection, varied roll endpoint, verified insights, stats/streaks, durable independent final, leave, zero bonuses and v0.6 compatibility.');
+
+// A host can test the real game alone, including readiness, reveal and scoring.
+clock+=21000;
+let solo=await req('',3,{name:'Solo',avatar:'🦊',count:1,novaCount:0,ecoCount:0,country:'canada',readySeconds:15,seconds:20,operation:'e'.repeat(32)});
+const soloPath='/'+solo.id;
+solo=await req(soloPath+'/start',3,{});assert.equal(solo.phase,'intro');assert.equal(solo.players.length,1);
+solo=await req(soloPath+'/ready',3,{gameId:solo.gameId,step:solo.step,ready:true});assert.equal(solo.phase,'vote');
+solo=await req(soloPath+'/vote',3,{gameId:solo.gameId,round:solo.round,choice:'C'});assert.equal(solo.phase,'reveal','the only vote completes the ballot');
+clock=solo.resultAt+1;solo=await req(soloPath,3);assert.equal(solo.phase,'finished');assert.equal(solo.players[0].score,1000);
+console.log('PASS solo start, ready, immediate vote lock, reveal and final score.');

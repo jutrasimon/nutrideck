@@ -12,3 +12,10 @@
 @media(prefers-reduced-motion:reduce){.product-insights li{animation:none}.gate-track i{transition:none}}
 #toast{pointer-events:none}
 .answer-wheel .tick.reverse-tick{animation:wheel-back .13s ease-out}@keyframes wheel-back{from{transform:translateY(17px);opacity:.5}to{transform:translateY(0);opacity:1}}
+
+/* Mobile: keep the shared card and show the whole pack with less empty space. */
+@media(max-width:760px){
+ .multi .vote-product .nd-card{--width:min(300px,calc(100vw - 76px))!important}
+ .multi .vote-product .nd-photo{margin:3cqw 3cqw 0}
+ .multi .vote-product .nd-photo img{padding:2px}
+}

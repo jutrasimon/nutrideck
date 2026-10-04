@@ -1,6 +1,6 @@
 # NutriDeck gyms
 
-Existing card and mechanics gyms are preserved. `multiplayer.html` is the real online Nutri-Score gym (2–8 players).
+Existing card and mechanics gyms are preserved. `multiplayer.html` is the real online Nutri-Score gym (1–8 players, including solo testing).
 
 ## Source and build
 

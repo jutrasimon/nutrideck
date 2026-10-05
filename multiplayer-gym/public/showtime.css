@@ -13,3 +13,7 @@
 
 .multi .standings-show .player-row{grid-template-columns:14px 32px minmax(0,1fr) 36px 76px;gap:7px;padding:8px 10px;height:60px;min-height:60px}
 .multi .standings-show .player-points{width:76px;font-size:19px!important}.multi .standings-show .vote-chip{width:36px;min-width:36px}.multi .standings-show .player-info strong{font-size:13px}
+
+/* Let the answer land, glow and stay legible before the first sticker. */
+.result-grade{animation:answer-impact 1.6s cubic-bezier(.2,.8,.2,1) both}
+@keyframes answer-impact{0%{opacity:0;transform:rotate(8deg) scale(.45);box-shadow:0 0 0 transparent}22%{opacity:1;transform:rotate(-6deg) scale(1.2);box-shadow:0 0 45px 12px color-mix(in srgb,var(--answer-color) 65%,transparent)}40%{transform:rotate(-5deg) scale(1);box-shadow:0 0 30px 6px color-mix(in srgb,var(--answer-color) 55%,transparent)}75%{transform:rotate(-5deg) scale(1);box-shadow:0 0 30px 6px color-mix(in srgb,var(--answer-color) 55%,transparent)}100%{opacity:1;transform:rotate(-5deg) scale(1);box-shadow:0 7px 0 #08060377}}

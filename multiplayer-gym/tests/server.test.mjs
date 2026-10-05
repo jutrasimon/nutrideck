@@ -27,7 +27,7 @@ const soloPath='/'+solo.id;
 solo=await req(soloPath+'/start',3,{});assert.equal(solo.phase,'intro');assert.equal(solo.players.length,1);
 solo=await req(soloPath+'/ready',3,{gameId:solo.gameId,step:solo.step,ready:true});assert.equal(solo.phase,'vote');
 solo=await req(soloPath+'/vote',3,{gameId:solo.gameId,round:solo.round,choice:'C'});assert.equal(solo.phase,'reveal','the only vote completes the ballot');
-clock=solo.resultAt+1;solo=await req(soloPath,3);assert.equal(solo.phase,'finished');assert.equal(solo.players[0].score,1000);
+clock=solo.resultAt+1;solo=await req(soloPath,3);assert.equal(solo.phase,'finished');assert.equal(solo.players[0].score,100);
 console.log('PASS solo start, ready, immediate vote lock, reveal and final score.');
 
 // Missing scores/names and dead photos cannot enter a drawn deck.
@@ -82,14 +82,27 @@ for(let round=0;round<7;round++){
  clock=wheelRoom.introEndAt+1;wheelRoom=await req(wheelPath,3);assert.equal(wheelRoom.phase,'vote');assert(!wheelRoom.product.nutriscore_grade);
  wheelRoom=await req(wheelPath+'/vote',3,{gameId:wheelRoom.gameId,round:wheelRoom.round,choice:expected[round]==='nova'?'4':expected[round]==='eco'?'B':'C'});assert.equal(wheelRoom.phase,'reveal');assert.equal(wheelRoom.readyDeadline,wheelRoom.landAt+11000);assert.equal(wheelRoom.insights,null);
  const before=await req(wheelPath,3);assert.equal(before.wheelSlot,null,'no future category leaked');
- clock=wheelRoom.landAt;wheelRoom=await req(wheelPath,3);assert.equal(wheelRoom.phase,'results');assert(wheelRoom.insights);assert.equal(wheelRoom.players[0].score,(round+1)*1000);
+ clock=wheelRoom.landAt;wheelRoom=await req(wheelPath,3);assert.equal(wheelRoom.phase,'results');assert(wheelRoom.insights);assert.equal(wheelRoom.players[0].score,(round+1)*100);
  await req(wheelPath+'/ready',3,{gameId:wheelRoom.gameId,step:wheelRoom.step,ready:true},409);
  clock=wheelRoom.readyDeadline;wheelRoom=await req(wheelPath,3);assert.equal(wheelRoom.phase,'standings');assert.equal(wheelRoom.readyDeadline,null);
  clock=wheelRoom.standingsEndAt;wheelRoom=await req(wheelPath,3);
 }
-assert.equal(wheelRoom.phase,'finished');assert.equal(wheelRoom.lastFinal.history.length,7);assert.equal(wheelRoom.lastFinal.players[0].score,7000);clock+=999999;assert.equal((await req(wheelPath,3)).phase,'finished');
+assert.equal(wheelRoom.phase,'finished');assert.equal(wheelRoom.lastFinal.history.length,7);assert.equal(wheelRoom.lastFinal.players[0].score,700);clock+=999999;assert.equal((await req(wheelPath,3)).phase,'finished');
 // Ready is optional but shared; every player must be ready to shorten the result pause.
 let gated=await req('',0,{name:'Host',avatar:'🦊',roulette:true,questionCount:1,seconds:23,readySeconds:37,readyEnabled:true,country:'canada',operation:'7'.repeat(32)});await req('/'+gated.id+'/join',1,{name:'Guest',avatar:'🐼'});gated=await req('/'+gated.id+'/start',0,{});clock=gated.introEndAt+1;gated=await req('/'+gated.id);gated=await req('/'+gated.id+'/vote',0,{gameId:gated.gameId,round:gated.round,choice:gated.mode==='nova'?'4':'B'});assert.equal(gated.deadline,clock+23000);gated=await req('/'+gated.id+'/vote',1,{gameId:gated.gameId,round:gated.round,choice:gated.mode==='nova'?'4':'B'});clock=gated.landAt+3300;gated=await req('/'+gated.id);const gateId=gated.step;gated=await req('/'+gated.id+'/ready',0,{gameId:gated.gameId,step:gateId,ready:true});assert.equal(gated.phase,'results');gated=await req('/'+gated.id+'/ready',1,{gameId:gated.gameId,step:gateId,ready:true});assert.equal(gated.phase,'standings');await req('/'+gated.id+'/ready',0,{gameId:gated.gameId,step:gateId,ready:true},409);
 console.log('PASS 7-question roulette, 85/10/5 boundaries, synchronized wheel/reconnect, answer+timer simultaneous, auto-only, shared ready, arbitrary seconds, final persistence.');
 // Energy components displayed as Calories must convert kJ rather than relabel the number.
 sqlite.exec('DELETE FROM off_cache');const caloric={...fixture[0],nutriscore:{'2023':{grade:'c',data:{components:{negative:[{id:'energy',value:418.4,unit:'kJ',points:2}],positive:[]}}}}};globalThis.fetch=async(url,opts)=>opts?.method==='HEAD'?new Response(null,{headers:{'Content-Type':'image/jpeg'}}):Response.json({products:[caloric],hits:[caloric]});let cal=await req('',3,{name:'Calories',avatar:'🦊',count:1,seconds:20,readySeconds:15,country:'canada',operation:'8'.repeat(32)});cal=await req('/'+cal.id+'/start',3,{});cal=await req('/'+cal.id+'/ready',3,{gameId:cal.gameId,step:cal.step,ready:true});cal=await req('/'+cal.id+'/vote',3,{gameId:cal.gameId,round:cal.round,choice:'C'});clock=cal.landAt+1;cal=await req('/'+cal.id,3);assert.equal(cal.insights.points[0].label,'Calories');assert(cal.insights.points[0].text.startsWith('100 kcal'));console.log('PASS 418.4 kJ displayed as 100 kcal, without altering score points.');
+// New games use hundreds, with evidence filtered to the revealed grade.
+for(const [i,grade] of ['a','d','e'].entries()){
+ sqlite.exec('DELETE FROM off_cache');const product={...fixture[0],nutriscore_grade:grade,nutriscore:{'2023':{...fixture[0].nutriscore['2023'],grade}}};
+ globalThis.fetch=async(url,opts)=>opts?.method==='HEAD'?new Response(null,{headers:{'Content-Type':'image/jpeg'}}):Response.json({products:[product],hits:[product]});
+ let r=await req('',0,{name:'Exact',avatar:'🦊',count:1,seconds:20,readySeconds:15,country:'canada',operation:String(i+1).repeat(32)});const path='/'+r.id;
+ await req(path+'/join',1,{name:'Proche',avatar:'🐼'});await req(path+'/join',2,{name:'Deux crans',avatar:'🐸'});r=await req(path+'/start',0,{});
+ for(let j=0;j<3;j++)r=await req(path+'/ready',j,{gameId:r.gameId,step:r.step,ready:true});
+ const target='ABCDE'.indexOf(grade.toUpperCase()),direction=target<2?1:-1;
+ for(let j=0;j<3;j++)r=await req(path+'/vote',j,{gameId:r.gameId,round:r.round,choice:'ABCDE'[target+j*direction]});
+ clock=r.landAt+1;r=await req(path);assert.deepEqual(r.players.map(p=>p.award),[100,60,25]);assert.equal(r.players[1].stats.near,1);
+ assert(r.insights.points.length);assert(r.insights.points.every(p=>p.tone!==(grade==='a'?'warm':'good')));
+}
+console.log('PASS 100/60/25 awards, near-answer stats, A excludes negative and D/E exclude positive stickers.');

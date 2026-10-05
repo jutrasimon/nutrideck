@@ -88,6 +88,7 @@
       d.classList.toggle('is-back',next==='back'||next==='mystery');accessible(next);
       clearTimeout(d._turnTimer);
       d.style.setProperty('--rx','0deg');d.style.setProperty('--ry','0deg');
+      if(animate&&old!==next)window.NutriAudio?.play('flip');
       if(animate&&old!==next&&!reduced()){
         d.classList.add('is-turning');
         d._turnTimer=setTimeout(()=>d.classList.remove('is-turning'),c.flip);
@@ -95,7 +96,7 @@
       requestAnimationFrame(()=>$$('.nd-title',d).forEach(fitTitle));
     };
     d.setFace(initialFace,false);
-    d.querySelector('.favorite').dataset.code=p.code;d.querySelector('.favorite').onclick=e=>{e.stopPropagation();favorite(p.code);};
+    d.querySelector('.favorite').dataset.code=p.code;d.querySelector('.favorite').onclick=e=>{e.stopPropagation();favorite(p.code);window.NutriAudio?.play('favorite');};
 
     d.querySelector('.grip').hidden=rendererOnly;d.querySelector('.grip').onclick=e=>{e.stopPropagation();if(drag?.moved||Date.now()<(d._suppressClick||0))return;armed={code:p.code,slot};if(view!=='slots')view='slots';render();$('.slot-board')?.scrollIntoView({behavior:reduced()?'instant':'smooth',block:'nearest'});$('.empty-slot,.drop-choose')?.focus({preventScroll:true});notice('Choisis un emplacement pour déposer la carte.');};
     d.addEventListener('click',e=>{if(e.target.closest('button,a')||Date.now()<(d._suppressClick||0))return;const sel=window.getSelection();if(sel?.type==='Range'&&d.contains(sel.anchorNode))return;d.setFace(d.dataset.face==='front'?'back':'front');});

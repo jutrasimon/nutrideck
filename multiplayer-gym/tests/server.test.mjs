@@ -69,3 +69,25 @@ for(const scenario of ['head-rejected','image-outage','search-outage']){
  else assert(result.error.includes(scenario==='image-outage'?'Vérification des photos indisponible':'Open Food Facts est indisponible'));
 }
 console.log('PASS preferred search, HEAD-to-GET fallback, distinct search and photo outages.');
+// New roulette loop: deterministic boundary slots exercise the exact 85/10/5 mapping.
+sqlite.exec('DELETE FROM off_cache');globalThis.fetch=async(url,opts)=>opts?.method==='HEAD'?new Response(null,{headers:{'Content-Type':'image/jpeg'}}):Response.json({products:fixture,hits:fixture});
+const originalRandom=crypto.getRandomValues.bind(crypto),testSlots=[0,84,85,94,95,99,42];let remainingSlots=[...testSlots];crypto.getRandomValues=arr=>{if(remainingSlots.length){arr[0]=remainingSlots.shift();return arr;}return originalRandom(arr);};
+let wheelRoom=await req('',3,{name:'Roulette',avatar:'🦊',roulette:true,questionCount:7,seconds:17,readySeconds:11,readyEnabled:false,country:'canada',operation:'6'.repeat(32)});
+const wheelPath='/'+wheelRoom.id;wheelRoom=await req(wheelPath+'/start',3,{});crypto.getRandomValues=originalRandom;
+assert.equal(wheelRoom.phase,'wheel');assert.equal(wheelRoom.total,7);assert.equal(wheelRoom.product,null);assert.equal(wheelRoom.readyEnabled,false);
+const expected=['nutri','nutri','eco','eco','nova','nova','nutri'];
+for(let round=0;round<7;round++){
+ assert.equal(wheelRoom.phase,'wheel');assert.equal(wheelRoom.mode,expected[round]);assert.equal(wheelRoom.wheelSlot,testSlots[round]);
+ clock=wheelRoom.wheelEndAt+1;wheelRoom=await req(wheelPath,3);assert.equal(wheelRoom.phase,'intro');assert.equal(wheelRoom.product,null);
+ clock=wheelRoom.introEndAt+1;wheelRoom=await req(wheelPath,3);assert.equal(wheelRoom.phase,'vote');assert(!wheelRoom.product.nutriscore_grade);
+ wheelRoom=await req(wheelPath+'/vote',3,{gameId:wheelRoom.gameId,round:wheelRoom.round,choice:expected[round]==='nova'?'4':expected[round]==='eco'?'B':'C'});assert.equal(wheelRoom.phase,'reveal');assert.equal(wheelRoom.readyDeadline,wheelRoom.landAt+11000);assert.equal(wheelRoom.insights,null);
+ const before=await req(wheelPath,3);assert.equal(before.wheelSlot,null,'no future category leaked');
+ clock=wheelRoom.landAt;wheelRoom=await req(wheelPath,3);assert.equal(wheelRoom.phase,'results');assert(wheelRoom.insights);assert.equal(wheelRoom.players[0].score,(round+1)*1000);
+ await req(wheelPath+'/ready',3,{gameId:wheelRoom.gameId,step:wheelRoom.step,ready:true},409);
+ clock=wheelRoom.readyDeadline;wheelRoom=await req(wheelPath,3);assert.equal(wheelRoom.phase,'standings');assert.equal(wheelRoom.readyDeadline,null);
+ clock=wheelRoom.standingsEndAt;wheelRoom=await req(wheelPath,3);
+}
+assert.equal(wheelRoom.phase,'finished');assert.equal(wheelRoom.lastFinal.history.length,7);assert.equal(wheelRoom.lastFinal.players[0].score,7000);clock+=999999;assert.equal((await req(wheelPath,3)).phase,'finished');
+// Ready is optional but shared; every player must be ready to shorten the result pause.
+let gated=await req('',0,{name:'Host',avatar:'🦊',roulette:true,questionCount:1,seconds:23,readySeconds:37,readyEnabled:true,country:'canada',operation:'7'.repeat(32)});await req('/'+gated.id+'/join',1,{name:'Guest',avatar:'🐼'});gated=await req('/'+gated.id+'/start',0,{});clock=gated.introEndAt+1;gated=await req('/'+gated.id);gated=await req('/'+gated.id+'/vote',0,{gameId:gated.gameId,round:gated.round,choice:gated.mode==='nova'?'4':'B'});assert.equal(gated.deadline,clock+23000);gated=await req('/'+gated.id+'/vote',1,{gameId:gated.gameId,round:gated.round,choice:gated.mode==='nova'?'4':'B'});clock=gated.landAt+3300;gated=await req('/'+gated.id);const gateId=gated.step;gated=await req('/'+gated.id+'/ready',0,{gameId:gated.gameId,step:gateId,ready:true});assert.equal(gated.phase,'results');gated=await req('/'+gated.id+'/ready',1,{gameId:gated.gameId,step:gateId,ready:true});assert.equal(gated.phase,'standings');await req('/'+gated.id+'/ready',0,{gameId:gated.gameId,step:gateId,ready:true},409);
+console.log('PASS 7-question roulette, 85/10/5 boundaries, synchronized wheel/reconnect, answer+timer simultaneous, auto-only, shared ready, arbitrary seconds, final persistence.');

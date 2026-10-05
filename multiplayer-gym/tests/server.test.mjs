@@ -106,3 +106,39 @@ for(const [i,grade] of ['a','d','e'].entries()){
  assert(r.insights.points.length);assert(r.insights.points.every(p=>p.tone!==(grade==='a'?'warm':'good')));
 }
 console.log('PASS 100/60/25 awards, near-answer stats, A excludes negative and D/E exclude positive stickers.');
+
+// Production start returns before OFF, and waitUntil owns work after the browser leaves.
+sqlite.exec('DELETE FROM off_cache');
+let releaseSearch;const searchGate=new Promise(resolve=>releaseSearch=resolve);
+globalThis.fetch=async(url,opts)=>{if(opts?.method==='HEAD')return new Response(null,{headers:{'Content-Type':'image/jpeg'}});await searchGate;return Response.json({products:fixture,hits:fixture});};
+let background=await req('',0,{name:'Background',avatar:'🐧',roulette:true,questionCount:7,seconds:20,readySeconds:15,country:'canada',operation:'ab'.repeat(16)});
+const tasks=[];
+const response=await worker.fetch(new Request('https://nutri.test/api/rooms/'+background.id+'/start',{method:'POST',headers:{Authorization:'Bearer '+tokens[0],'Content-Type':'application/json'},body:'{}'}),{DB},{waitUntil(task){tasks.push(task);}});
+assert.equal(response.status,202);assert.equal((await response.json()).phase,'loading');assert.equal(tasks.length,1);
+assert.equal((await req('/'+background.id)).phase,'loading');
+await req('/'+background.id+'/start',0,{},409);
+releaseSearch();await Promise.all(tasks);
+background=await req('/'+background.id);assert.equal(background.phase,'wheel');assert.equal(background.total,7);
+console.log('PASS start acknowledged immediately, detached loading survives client departure, duplicate start rejected, polling recovers complete game.');
+
+// Even a terminated worker cannot leave a durable loading lock forever.
+const stranded=JSON.parse(sqlite.prepare('SELECT state FROM rooms WHERE id=?').get(background.id).state);
+stranded.phase='loading';stranded.loadingAt=clock-35001;stranded.loadingJob='interrupted';
+sqlite.prepare('UPDATE rooms SET state=? WHERE id=?').run(JSON.stringify(stranded),background.id);
+const recovered=await req('/'+background.id);assert.equal(recovered.phase,'lobby');assert.match(recovered.error,/interrompu/);assert.equal(recovered.players[0].name,'Background');
+assert.equal(JSON.parse(sqlite.prepare('SELECT state FROM rooms WHERE id=?').get(background.id).state).phase,'lobby');
+console.log('PASS abandoned loading lease expires, recovery is persisted and players remain in their room.');
+
+// A hung upstream has a hard budget and releases the room, including in waitUntil.
+sqlite.exec('DELETE FROM off_cache');
+let expire;const originalSetTimeout=globalThis.setTimeout,originalClearTimeout=globalThis.clearTimeout;
+globalThis.setTimeout=(fn,ms,...args)=>ms===24000?(expire=fn,123456789):originalSetTimeout(fn,ms,...args);
+globalThis.clearTimeout=id=>id===123456789?undefined:originalClearTimeout(id);
+globalThis.fetch=async(url,opts)=>new Promise((_,reject)=>{opts.signal.addEventListener('abort',()=>reject(opts.signal.reason),{once:true});if(opts.signal.aborted)reject(opts.signal.reason);});
+const timeoutTasks=[];
+const pending=await worker.fetch(new Request('https://nutri.test/api/rooms/'+background.id+'/start',{method:'POST',headers:{Authorization:'Bearer '+tokens[0],'Content-Type':'application/json'},body:'{}'}),{DB},{waitUntil(task){timeoutTasks.push(task);}});
+assert.equal(pending.status,202);
+while(!expire)await Promise.resolve();expire();await Promise.all(timeoutTasks);
+globalThis.setTimeout=originalSetTimeout;globalThis.clearTimeout=originalClearTimeout;
+const timedOut=await req('/'+background.id);assert.equal(timedOut.phase,'lobby');assert.match(timedOut.error,/trop de temps/);
+console.log('PASS upstream timeout aborts work and makes start available again without losing the room.');

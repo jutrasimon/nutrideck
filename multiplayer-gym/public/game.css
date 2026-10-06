@@ -22,3 +22,5 @@
 .game-app .game-review>summary::marker{content:""}
 .game-app .game-review>summary::before{content:"";display:block;flex:0 0 7px;width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .18s ease;margin-right:3px}
 .game-app .game-review[open]>summary::before{transform:rotate(45deg)}
+
+.game-app .sticker-symbol{box-sizing:border-box;display:flex;align-items:center;justify-content:center;line-height:1;padding:0}.game-app .sticker-symbol svg{display:block;width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}

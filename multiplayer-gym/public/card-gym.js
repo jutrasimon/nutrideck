@@ -67,7 +67,7 @@
   }
   function backHTML(p){
     const chips=a=>(a||[]).map(x=>`<span>${esc(x)}</span>`).join('');
-    return `<div class="nd-face nd-back"><div class="nd-scroll" tabindex="0" aria-label="Détails du produit, faire défiler"><h3 class="nd-title">${esc(p.name)}</h3><div class="nd-table">${Object.entries(stats).map(([k,[n,u]])=>`<div class="nd-row"><span>${n}</span><b>${p.maskedMetric===k?'Masqué':fmt(p.n?.[k])}${p.n?.[k]!=null?' '+u:''}</b></div>`).join('')}</div><div class="nd-foot">Pour 100 g / 100 ml · selon la source</div><section class="nd-section ingredients"><h4>Ingrédients</h4><p>${esc(p.ingredients||'Non renseignés')}</p></section><section class="nd-section allergens"><h4>Allergènes <span>${p.allergens?.length||'—'}</span></h4>${p.allergens?.length?`<div class="allergen-chips">${chips(p.allergens)}</div>`:'<p class="nd-muted">Non renseignés. Vérifier l’emballage.</p>'}${p.traces?.length?`<h5>Traces possibles</h5><div class="allergen-chips traces">${chips(p.traces)}</div>`:''}</section>${additiveHTML(p)}<div class="nd-source">${p.local?'IMAGE LOCALE · TEST VISUEL':p.demo?'DÉMONSTRATION':p.masked?'Open Food Facts · fiche masquée':`<a href="https://world.openfoodfacts.org/product/${encodeURIComponent(p.code)}" target="_blank" rel="noopener">Open Food Facts</a> · ${esc(p.code)}`}${p.qty?`<span>${esc(p.qty)}</span>`:''}</div></div><div class="nd-scroll-track" aria-hidden="true" hidden><i></i></div><div class="scroll-cue" aria-hidden="true">Détails en dessous ↓</div></div>`;
+    return `<div class="nd-face nd-back"><div class="nd-scroll" tabindex="0" aria-label="Détails du produit, faire défiler"><h3 class="nd-title">${esc(p.name)}</h3><div class="nd-table">${Object.entries(stats).map(([k,[n,u]])=>`<div class="nd-row"><span>${n}</span><b>${p.maskedMetric===k?'Masqué':fmt(p.n?.[k])}${p.n?.[k]!=null?' '+u:''}</b></div>`).join('')}</div><div class="nd-foot">Pour 100 g / 100 ml · selon la source</div><section class="nd-section ingredients"><h4>Ingrédients</h4><p>${esc(p.ingredients||'Non renseignés')}</p></section><section class="nd-section allergens"><h4>Allergènes <span>${p.allergens?.length||'—'}</span></h4>${p.allergens?.length?`<div class="allergen-chips">${chips(p.allergens)}</div>`:'<p class="nd-muted">Non renseignés. Vérifier l’emballage.</p>'}${p.traces?.length?`<h5>Traces possibles</h5><div class="allergen-chips traces">${chips(p.traces)}</div>`:''}</section>${additiveHTML(p)}<div class="nd-source">${p.local?'IMAGE LOCALE · TEST VISUEL':p.demo?'DÉMONSTRATION':(p.masked||p.maskedMetric)?'Open Food Facts · fiche masquée':`<a href="https://world.openfoodfacts.org/product/${encodeURIComponent(p.code)}" target="_blank" rel="noopener">Open Food Facts</a> · ${esc(p.code)}`}${p.qty?`<span>${esc(p.qty)}</span>`:''}</div></div><div class="nd-scroll-track" aria-hidden="true" hidden><i></i></div><div class="scroll-cue" aria-hidden="true">Détails en dessous ↓</div></div>`;
   }
   const mysteryHTML=()=>'<div class="nd-face nd-mystery"><span class="seal">N</span><b>NutriDeck</b><small>À VOUS DE JOUER</small></div>';
   let drag=null;
@@ -110,8 +110,8 @@
   }
   window.NutriDeckCards={
     create(raw,{masked=false,maskedMetric=null}={}){
-      const p=normalize(raw);if(masked){p.nutri=null;p.nova=null;p.eco=null;p.masked=true;p.maskedMetric=maskedMetric;if(maskedMetric)p.n[maskedMetric]=null;}
-      const card=makeCard(p,{...cfg,size:240,tilt:false,scatter:false},{width:240,initialFace:'front'});
+      const p=normalize(raw);p.maskedMetric=maskedMetric;if(maskedMetric)p.n[maskedMetric]=null;if(masked){p.nutri=null;p.nova=null;p.eco=null;p.masked=true;}
+      const card=makeCard(p,{...cfg,metric:maskedMetric||cfg.metric,size:240,tilt:false,scatter:false},{width:240,initialFace:'front'});
       updateFavorites();requestAnimationFrame(updateFavorites);return card;
     },
     dispose(card){if(card){ro?.unobserve(card);clearTimeout(card._turnTimer);}},

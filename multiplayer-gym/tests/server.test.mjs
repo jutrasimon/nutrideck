@@ -3,7 +3,7 @@ const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync('drizzle/0000
 const DB={prepare(sql){return {bind(...params){return{async first(){return sqlite.prepare(sql).get(...params)||null},async run(){const r=sqlite.prepare(sql).run(...params);return{meta:{changes:r.changes}}}}}}}};
 let clock=Date.now();Date.now=()=>clock;const tokens=['a','b','c','d'].map(x=>x.repeat(64));
 async function req(path,who=0,data,status=200){const r=await worker.fetch(new Request('https://nutri.test/api/rooms'+path,{method:data===undefined?'GET':'POST',headers:{Authorization:'Bearer '+tokens[who],'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)}),{DB},{});const d=await r.json();assert.equal(r.status,status,JSON.stringify(d));return d;}
-const raw=JSON.parse(readFileSync('public/gym-products.json'))[0];const fixture=Array.from({length:18},(_,i)=>({...raw,code:String(4000000000000+i),countries_tags:i<12?['en:canada']:['en:france'],image_front_url:'https://images.openfoodfacts.org/test.jpg',nutriscore_grade:'c',nova_group:4,ecoscore_grade:'b',nutriscore_version:'2023',nutriscore:{'2023':{grade:'c',data:{negative_points:8,positive_points:1,components:{negative:[{id:'sugars',value:25,unit:'g',points:6}],positive:[{id:'fiber',value:2,unit:'g',points:1}]}}}}}));
+const raw=JSON.parse(readFileSync('public/gym-products.json'))[0];const fixture=Array.from({length:18},(_,i)=>({...raw,code:String(4000000000000+i),quantity:'250 g',nutriments:{...raw.nutriments,sugars_100g:i+1,salt_100g:(i+1)/10,fat_100g:i+2,fiber_100g:i+3,proteins_100g:i+4},countries_tags:i<12?['en:canada']:['en:france'],image_front_url:'https://images.openfoodfacts.org/test.jpg',nutriscore_grade:'c',nova_group:4,ecoscore_grade:'b',nutriscore_version:'2023',nutriscore:{'2023':{grade:'c',data:{negative_points:8,positive_points:1,components:{negative:[{id:'sugars',value:25,unit:'g',points:6}],positive:[{id:'fiber',value:2,unit:'g',points:1}]}}}}}));
 const urls=[];globalThis.fetch=async (url,options)=>{urls.push(String(url));if(options?.method==='HEAD')return new Response(null,{headers:{'Content-Type':'image/jpeg'}});return Response.json({products:fixture,hits:fixture})};
 let s=await req('',0,{name:'Simon',avatar:'🦊',count:2,novaCount:1,ecoCount:1,country:'canada',readySeconds:15,seconds:20,operation:'f'.repeat(32)}),id=s.id;
 await Promise.all([req('/'+id+'/join',1,{name:'Paul',avatar:'🐼'}),req('/'+id+'/join',2,{name:'Kattie',avatar:'🐸'})]);
@@ -69,9 +69,9 @@ for(const scenario of ['head-rejected','image-outage','search-outage']){
  else assert(result.error.includes(scenario==='image-outage'?'Vérification des photos indisponible':'Open Food Facts est indisponible'));
 }
 console.log('PASS preferred search, HEAD-to-GET fallback, distinct search and photo outages.');
-// New roulette loop: deterministic boundary slots exercise the exact 85/10/5 mapping.
+// New roulette loop: deterministic boundary slots exercise the exact 75/10/5/10 mapping.
 sqlite.exec('DELETE FROM off_cache');globalThis.fetch=async(url,opts)=>opts?.method==='HEAD'?new Response(null,{headers:{'Content-Type':'image/jpeg'}}):Response.json({products:fixture,hits:fixture});
-const originalRandom=crypto.getRandomValues.bind(crypto),testSlots=[0,84,85,94,95,99,42];let remainingSlots=[...testSlots];crypto.getRandomValues=arr=>{if(remainingSlots.length){arr[0]=remainingSlots.shift();return arr;}return originalRandom(arr);};
+const originalRandom=crypto.getRandomValues.bind(crypto),testSlots=[0,74,75,84,85,89,42];let remainingSlots=[...testSlots];crypto.getRandomValues=arr=>{if(remainingSlots.length){arr[0]=remainingSlots.shift();return arr;}return originalRandom(arr);};
 let wheelRoom=await req('',3,{name:'Roulette',avatar:'🦊',roulette:true,questionCount:7,seconds:17,readySeconds:11,readyEnabled:false,country:'canada',operation:'6'.repeat(32)});
 const wheelPath='/'+wheelRoom.id;wheelRoom=await req(wheelPath+'/start',3,{});crypto.getRandomValues=originalRandom;
 assert.equal(wheelRoom.phase,'wheel');assert.equal(wheelRoom.total,7);assert.equal(wheelRoom.product,null);assert.equal(wheelRoom.readyEnabled,false);
@@ -90,7 +90,7 @@ for(let round=0;round<7;round++){
 assert.equal(wheelRoom.phase,'finished');assert.equal(wheelRoom.lastFinal.history.length,7);assert.equal(wheelRoom.lastFinal.players[0].score,700);clock+=999999;assert.equal((await req(wheelPath,3)).phase,'finished');
 // Ready is optional but shared; every player must be ready to shorten the result pause.
 let gated=await req('',0,{name:'Host',avatar:'🦊',roulette:true,questionCount:1,seconds:23,readySeconds:37,readyEnabled:true,country:'canada',operation:'7'.repeat(32)});await req('/'+gated.id+'/join',1,{name:'Guest',avatar:'🐼'});gated=await req('/'+gated.id+'/start',0,{});clock=gated.introEndAt+1;gated=await req('/'+gated.id);gated=await req('/'+gated.id+'/vote',0,{gameId:gated.gameId,round:gated.round,choice:gated.mode==='nova'?'4':'B'});assert.equal(gated.deadline,clock+23000);gated=await req('/'+gated.id+'/vote',1,{gameId:gated.gameId,round:gated.round,choice:gated.mode==='nova'?'4':'B'});clock=gated.landAt+3300;gated=await req('/'+gated.id);const gateId=gated.step;gated=await req('/'+gated.id+'/ready',0,{gameId:gated.gameId,step:gateId,ready:true});assert.equal(gated.phase,'results');gated=await req('/'+gated.id+'/ready',1,{gameId:gated.gameId,step:gateId,ready:true});assert.equal(gated.phase,'finished');await req('/'+gated.id+'/ready',0,{gameId:gated.gameId,step:gateId,ready:true},409);
-console.log('PASS 7-question roulette, 85/10/5 boundaries, synchronized wheel/reconnect, answer+timer simultaneous, auto-only, shared ready, arbitrary seconds, final persistence.');
+console.log('PASS 7-question roulette, 75/10/5/10 boundaries, synchronized wheel/reconnect, answer+timer simultaneous, auto-only, shared ready, arbitrary seconds, final persistence.');
 // Energy components displayed as Calories must convert kJ rather than relabel the number.
 sqlite.exec('DELETE FROM off_cache');const caloric={...fixture[0],nutriscore:{'2023':{grade:'c',data:{components:{negative:[{id:'energy',value:418.4,unit:'kJ',points:2}],positive:[]}}}}};globalThis.fetch=async(url,opts)=>opts?.method==='HEAD'?new Response(null,{headers:{'Content-Type':'image/jpeg'}}):Response.json({products:[caloric],hits:[caloric]});let cal=await req('',3,{name:'Calories',avatar:'🦊',count:1,seconds:20,readySeconds:15,country:'canada',operation:'8'.repeat(32)});cal=await req('/'+cal.id+'/start',3,{});cal=await req('/'+cal.id+'/ready',3,{gameId:cal.gameId,step:cal.step,ready:true});cal=await req('/'+cal.id+'/vote',3,{gameId:cal.gameId,round:cal.round,choice:'C'});clock=cal.landAt+1;cal=await req('/'+cal.id,3);assert.equal(cal.insights.points[0].label,'Calories');assert(cal.insights.points[0].text.startsWith('100 kcal'));console.log('PASS 418.4 kJ displayed as 100 kcal, without altering score points.');
 // New games use hundreds, with evidence filtered to the revealed grade.
@@ -142,3 +142,32 @@ while(!expire)await Promise.resolve();expire();await Promise.all(timeoutTasks);
 globalThis.setTimeout=originalSetTimeout;globalThis.clearTimeout=originalClearTimeout;
 const timedOut=await req('/'+background.id);assert.equal(timedOut.phase,'lobby');assert.match(timedOut.error,/trop de temps/);
 console.log('PASS upstream timeout aborts work and makes start available again without losing the room.');
+// v1.3: two-product comparison, private seat recovery and host removal.
+sqlite.exec('DELETE FROM off_cache');
+const compareFixtures=fixture.slice(0,12).map((p,i)=>({...p,quantity:'250 g',nutriments:{...p.nutriments,salt_100g:i+1,salt_serving:i+2,sodium_100g:i/2,sugars_100g:i+2,fat_100g:i+3,fiber_100g:i+4,proteins_100g:i+5}}));
+globalThis.fetch=async(url,opts)=>opts?.method==='HEAD'?new Response(null,{headers:{'Content-Type':'image/jpeg'}}):Response.json({products:compareFixtures,hits:compareFixtures});
+let duel=await req('',0,{name:'Duel host',avatar:'🦊',roulette:true,questionCount:1,seconds:19,country:'canada',operation:'ac'.repeat(16)});const dp='/'+duel.id;
+assert.equal(duel.readySeconds,10);assert.match(duel.recoveryCode,/^[a-f0-9]{16}$/);const hostCode=duel.recoveryCode;
+let guest=await req(dp+'/join',1,{name:'Duel guest',avatar:'🐼'});const guestCode=guest.recoveryCode,guestId=guest.me;
+await req(dp+'/join',2,{name:'Absent',avatar:'🐸'});
+assert(!JSON.stringify((await req(dp,3)).players).includes(hostCode));assert.equal((await req(dp,3)).recoveryCode,null);
+remainingSlots=[90];crypto.getRandomValues=arr=>{if(remainingSlots.length){arr[0]=remainingSlots.shift();return arr;}return originalRandom(arr);};
+duel=await req(dp+'/start',0,{});crypto.getRandomValues=originalRandom;
+assert.equal(duel.mode,'compare');assert.equal(duel.rouletteVersion,2);clock=duel.introEndAt+1;duel=await req(dp);
+assert.equal(duel.phase,'vote');assert.equal(duel.comparison.products.length,2);assert.equal(duel.comparison.values,null);assert.equal(duel.product,null);assert.notEqual(duel.comparison.products[0].code,duel.comparison.products[1].code);
+const metric=duel.comparison.metric;assert(duel.comparison.products.every(p=>!Object.keys(p.nutriments).some(k=>k===metric||k.startsWith(metric+'_'))),'target removed from API');assert(duel.comparison.products.every(p=>p.nutriscore_grade==='c'),'other scores remain available');
+const state=()=>JSON.parse(sqlite.prepare('SELECT state FROM rooms WHERE id=?').get(duel.id).state);const question=state().deck[0],correct=question.products[0].nutriments[metric+'_100g']>question.products[1].nutriments[metric+'_100g']?'A':'B',wrong=correct==='A'?'B':'A';
+duel=await req(dp+'/vote',0,{gameId:duel.gameId,round:1,choice:wrong});const firstDeadline=duel.deadline;
+duel=await req(dp+'/vote',0,{gameId:duel.gameId,round:1,choice:correct});assert.equal(duel.deadline,firstDeadline);
+await req(dp+'/vote',1,{gameId:duel.gameId,round:1,choice:wrong});
+await req(dp+'/remove',1,{playerId:duel.me},403);await req(dp+'/remove',0,{playerId:duel.me},409);
+const absent=duel.players.find(p=>p.name==='Absent');duel=await req(dp+'/remove',0,{playerId:absent.id});assert.equal(duel.phase,'reveal','removal unblocks all-voted');assert.equal(duel.revealTarget,correct);assert.equal(duel.comparison.values,null,'hidden during shuffle');
+await req(dp+'/recover',3,{code:'0'.repeat(16)},403);
+const restored=await req(dp+'/recover',3,{code:guestCode});assert.equal(restored.me,guestId);assert.equal(restored.players.length,2);assert.notEqual(restored.recoveryCode,guestCode);assert.equal((await req(dp,1)).me,null,'old browser loses ownership');assert.equal(restored.players.find(p=>p.id===guestId).vote,wrong);await req(dp+'/recover',1,{code:guestCode},403);
+clock=duel.landAt+3300;duel=await req(dp);assert.deepEqual(duel.players.map(p=>p.award),[100,0]);assert.equal(duel.players[1].stats.near,0);assert.equal(duel.players[1].stats.worst,null);assert(duel.comparison.values.every(Number.isFinite));
+duel=await req(dp+'/ready',0,{gameId:duel.gameId,step:duel.step});assert.equal(duel.phase,'results');duel=await req(dp+'/remove',0,{playerId:guestId});assert.equal(duel.phase,'finished','removal unblocks readiness');await req(dp+'/recover',1,{code:restored.recoveryCode},403);
+assert.equal(duel.lastFinal.players[0].score,100);assert.equal(duel.lastFinal.history[0].insights.points.length,2);
+console.log('PASS comparison masking, editable votes, 100/0 points, recover across browsers, private rotated codes, host-only removal, vote/ready unblock.');
+// Equal values and mismatched nutrition bases are never paired.
+for(const invalid of ['equal','basis']){sqlite.exec('DELETE FROM off_cache');const two=compareFixtures.slice(0,2).map((p,i)=>({...p,quantity:invalid==='basis'&&i?'250 ml':'250 g',nutriments:Object.fromEntries(['salt','sugars','fat','fiber','proteins'].map(k=>[k+'_100g',invalid==='equal'?3:i+2]))}));globalThis.fetch=async(url,opts)=>opts?.method==='HEAD'?new Response(null,{headers:{'Content-Type':'image/jpeg'}}):Response.json({products:two,hits:two});let r=await req('',0,{name:'Invalid',avatar:'🦊',roulette:true,questionCount:1,seconds:20,country:'canada',operation:(invalid==='equal'?'ad':'ae').repeat(16)});remainingSlots=[90];crypto.getRandomValues=arr=>{if(remainingSlots.length){arr[0]=remainingSlots.shift();return arr;}return originalRandom(arr);};await req('/'+r.id+'/start',0,{},503);crypto.getRandomValues=originalRandom;assert.equal((await req('/'+r.id)).phase,'lobby');}
+console.log('PASS comparison excludes ties and mixed g/ml bases.');
